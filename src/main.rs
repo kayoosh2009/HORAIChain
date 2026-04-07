@@ -9,6 +9,9 @@ use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 use tower_http::services::ServeDir;
 use bip39::{Mnemonic, Language};
+use sha2::{Sha512, Digest};
+use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 
 // --- МОДЕЛИ ДАННЫХ ---
 
@@ -48,7 +51,7 @@ struct WalletStats {
 }
 
 struct AppState {
-    db: FirestoreDb,
+    db: PgPool,          // было: FirestoreDb
     bot: Bot,
     chat_id: String,
 }
@@ -96,43 +99,66 @@ struct JoinRequest {
 }
 
 // --- Wallet Functions ---
-impl MewWallet {
-    // 1. Создание кошелька
+impl HoraiWallet {
     fn create_new() -> Self {
-        let mut csprng = OsRng;
-        let signing_key = SigningKey::generate(&mut csprng);
+        // 1. Генерируем случайную мнемонику (12 слов = 128 бит энтропии)
+        let mnemonic = Mnemonic::generate_in(Language::English, 12)
+            .expect("Failed to generate mnemonic");
+
+        // 2. Из мнемоники получаем seed (стандарт BIP39, без пароля)
+        let seed = mnemonic.to_seed("");
+
+        // 3. Берём первые 32 байта seed как приватный ключ
+        let secret_bytes: [u8; 32] = seed[..32].try_into().unwrap();
+        let signing_key = SigningKey::from_bytes(&secret_bytes);
         let verifying_key = VerifyingKey::from(&signing_key);
 
         let pub_hex = hex::encode(verifying_key.as_bytes());
-        let sec_hex = hex::encode(signing_key.to_bytes());
+        let sec_hex = hex::encode(secret_bytes);
 
-        // Генерируем мнемонику из байт секретного ключа
-        let mnemonic = Mnemonic::from_entropy(&signing_key.as_bytes()[..16])
-            .expect("Failed to generate mnemonic");
-
-        MewWallet {
-            address: format!("mew013{}", &pub_hex[..24]),
+        HoraiWallet {
+            // Адрес = префикс + первые 24 символа публичного ключа
+            address: format!("horai1{}", &pub_hex[..24]),
             public_key: pub_hex,
             secret_key: sec_hex,
             mnemonic: mnemonic.to_string(),
         }
     }
 
-    // 2. Импорт по секретному ключу
-    fn import_from_secret(secret_hex: &str) -> Result<Self, String> {
-        let secret_bytes = hex::decode(secret_hex).map_err(|_| "Invalid hex")?;
-        let bytes: [u8; 32] = secret_bytes.try_into().map_err(|_| "Invalid length")?;
-        
-        let signing_key = SigningKey::from_bytes(&bytes);
+    fn import_from_mnemonic(phrase: &str) -> Result<Self, String> {
+        // Парсим мнемонику
+        let mnemonic = Mnemonic::parse_in(Language::English, phrase)
+            .map_err(|_| "Invalid mnemonic phrase")?;
+
+        // Тот же путь: мнемоника → seed → ключ → адрес
+        let seed = mnemonic.to_seed("");
+        let secret_bytes: [u8; 32] = seed[..32].try_into().unwrap();
+        let signing_key = SigningKey::from_bytes(&secret_bytes);
         let verifying_key = VerifyingKey::from(&signing_key);
 
         let pub_hex = hex::encode(verifying_key.as_bytes());
+        let sec_hex = hex::encode(secret_bytes);
 
-        Ok(MewWallet {
-            address: format!("mew013{}", &pub_hex[..24]),
+        Ok(HoraiWallet {
+            address: format!("horai1{}", &pub_hex[..24]),
+            public_key: pub_hex,
+            secret_key: sec_hex,
+            mnemonic: mnemonic.to_string(),
+        })
+    }
+
+    fn import_from_secret(secret_hex: &str) -> Result<Self, String> {
+        let secret_bytes = hex::decode(secret_hex).map_err(|_| "Invalid hex")?;
+        let bytes: [u8; 32] = secret_bytes.try_into().map_err(|_| "Invalid length")?;
+        let signing_key = SigningKey::from_bytes(&bytes);
+        let verifying_key = VerifyingKey::from(&signing_key);
+        let pub_hex = hex::encode(verifying_key.as_bytes());
+
+        Ok(HoraiWallet {
+            address: format!("horai1{}", &pub_hex[..24]),
             public_key: pub_hex,
             secret_key: secret_hex.to_string(),
-            mnemonic: String::new(),
+            mnemonic: String::new(), // при импорте по ключу мнемоника неизвестна
         })
     }
 }
@@ -587,45 +613,62 @@ async fn join_group(
 async fn main() {
     dotenv().ok();
 
-    let project_id = env::var("FIREBASE_PROJECT_ID").expect("FIREBASE_PROJECT_ID не задан");
-    let bot_token = env::var("TELEGRAM_BOT_TOKEN").expect("TELEGRAM_BOT_TOKEN не задан");
-    let chat_id = env::var("TELEGRAM_CHAT_ID").expect("TELEGRAM_CHAT_ID не задан");
-    let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    // --- Переменные окружения ---
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL не задан");
+    let bot_token    = env::var("TELEGRAM_BOT_TOKEN").expect("TELEGRAM_BOT_TOKEN не задан");
+    let chat_id      = env::var("TELEGRAM_CHAT_ID").expect("TELEGRAM_CHAT_ID не задан");
+    let port         = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let render_url   = env::var("RENDER_URL").unwrap_or_default(); // для keep-alive
 
-    // Инициализация Firestore
-    let db = FirestoreDb::with_options(FirestoreDbOptions::new(project_id))
+    // --- Подключение к Supabase ---
+    let db = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
         .await
-        .expect("Error Firebase connect");
+        .expect("Не удалось подключиться к Supabase");
 
-    // Инициализация Telegram Бота
+    // --- Telegram бот ---
     let bot = Bot::new(bot_token);
 
-    // Создаем общее состояние
+    // --- Общее состояние ---
     let shared_state = Arc::new(AppState {
         db,
         bot,
         chat_id,
     });
 
-    // Настройка роутера
+    // --- Keep-alive (каждые 5 минут пингуем себя чтобы Render не усыпил) ---
+    if !render_url.is_empty() {
+        let url = render_url.clone();
+        tokio::spawn(async move {
+            let client = reqwest::Client::new();
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(300)).await;
+                let _ = client.get(&url).send().await;
+                println!("⏰ Keep-alive ping отправлен");
+            }
+        });
+    }
+
+    // --- Роутер ---
     let app = Router::new()
-        .route("/blocks", get(get_blocks))
-        .route("/add_block", post(add_block))
-        .route("/wallet/new", get(create_wallet))
-        .route("/wallet/import", post(import_wallet))
-        .route("/wallet/:address", get(get_wallet_stats))
-        .route("/wallet/task", post(complete_task))
-        .route("/wallet/send", post(send_tokens))
-        .route("/groups/create", post(create_group))
-        .route("/groups/join", post(join_group))
-        .route("/groups/ping", post(node_ping))
-        .fallback_service(ServeDir::new("static")) // Раздаем статику
-        .with_state(shared_state); // Состояние прикрепляем ОДИН РАЗ в самом конце
-        
-    // Запуск сервера
+        .route("/blocks",         get(get_blocks))
+        .route("/add_block",      post(add_block))
+        .route("/wallet/new",     get(create_wallet))
+        .route("/wallet/import",  post(import_wallet))
+        .route("/wallet/:address",get(get_wallet_stats))
+        .route("/wallet/task",    post(complete_task))
+        .route("/wallet/send",    post(send_tokens))
+        .route("/groups/create",  post(create_group))
+        .route("/groups/join",    post(join_group))
+        .route("/groups/ping",    post(node_ping))
+        .fallback_service(ServeDir::new("static"))
+        .with_state(shared_state);
+
+    // --- Запуск ---
     let addr = format!("0.0.0.0:{}", port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    println!("🚀 MewChain Core запущена на {}", addr);
+    println!("🚀 HORAIChain запущена на {}", addr);
 
     axum::serve(listener, app).await.unwrap();
 }
