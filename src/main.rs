@@ -246,11 +246,7 @@ async fn get_wallet_stats(
     match row {
         Some(r) => {
             let mut stats = WalletStats {
-                address: r.address,
-                balance: r.balance,
-                apy_earned: r.apy_earned,
-                tasks_completed: r.tasks_completed as u32,
-                last_claim: r.last_claim,
+                balance: r.balance.unwrap_or(0.0), apy_earned: r.apy_earned.unwrap_or(0.0), tasks_completed: r.tasks_completed.unwrap_or(0) as u32, last_claim: r.last_claim.unwrap_or(0),
             };
 
             let now = chrono::Utc::now().timestamp();
@@ -294,7 +290,7 @@ async fn get_wallet_stats(
 async fn import_wallet(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<ImportRequest>,
-) -> Result<Json<MewWallet>, (axum::http::StatusCode, String)> {
+) -> Result<Json<HoraiWallet>, (axum::http::StatusCode, String)> {
     // 1. Пытаемся восстановить кошелек из ключа
     let wallet = if let Some(mnemonic_str) = &payload.mnemonic {
         // Если пришла мнемоника — конвертируем её в ключ
@@ -307,11 +303,11 @@ async fn import_wallet(
             arr
         };
         let secret_hex = hex::encode(bytes);
-        MewWallet::import_from_secret(&secret_hex)
+        HoraiWallet::import_from_secret(&secret_hex)
             .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?
     } else if let Some(secret_key) = &payload.secret_key {
         // Если пришел hex ключ напрямую
-        MewWallet::import_from_secret(secret_key)
+        HoraiWallet::import_from_secret(secret_key)
             .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?
     } else {
         return Err((axum::http::StatusCode::BAD_REQUEST, "Provide mnemonic or secret_key".to_string()));
@@ -319,20 +315,7 @@ async fn import_wallet(
 
     // 2. Проверяем, есть ли он в базе, если нет — создаем начальные статы
     let _: () = state.dbsqlx::query!
-        .insert()
-        .into("wallets")
-        .document_id(&wallet.address)
-        .object(&WalletStats {
-            address: wallet.address.clone(),
-            balance: 0.0,
-            apy_earned: 0.0,
-            tasks_completed: 0,
-            last_claim: 0,
-        })
-        .execute::<()>()
-        .await
-        .map_err(|_| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "DB Error".to_string()))?;
-
+        sqlx::query!("INSERT INTO wallets (address, balance, apy_earned, tasks_completed, last_claim) VALUES ($1, 0, 0, 0, 0) ON CONFLICT (address) DO NOTHING", wallet.address).execute(&state.db).await.map_err(|_| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "DB Error".to_string()))?;
     Ok(Json(wallet))
 }
 
