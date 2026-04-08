@@ -32,7 +32,7 @@ struct Block {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct MewWallet {
+struct HoraiWallet {
     address: String,
     public_key: String,
     secret_key: String,
@@ -167,65 +167,65 @@ async fn add_block(
     State(state): State<Arc<AppState>>,
     Json(new_block): Json<Block>,
 ) -> Json<String> {
-    // 1. Сохраняем в Firestore (используем индекс блока как имя документа)
-    let _: () = state.db.fluent()
-        .insert()
-        .into("blocks")
-        .document_id(new_block.index.to_string())
-        .object(&new_block)
-        .execute::<()>()
-        .await
-        .expect("Failed to write block to Firestore");
+    let transactions_json = serde_json::to_value(&new_block.transactions).unwrap();
 
-    // 2. Формируем отчет для Telegram
+    sqlx::query!(
+        "INSERT INTO blocks (index, timestamp, transactions, prev_hash, hash, validator)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (index) DO NOTHING",
+        new_block.index as i32,
+        new_block.timestamp,
+        transactions_json,
+        new_block.prev_hash,
+        new_block.hash,
+        new_block.validator,
+    )
+    .execute(&state.db)
+    .await
+    .expect("Failed to write block");
+
     let report = format!(
-        "📦 *Новый блок #{}*\n Hash: `{}`\n Валидатор: `{}`\n Транзакций: {}",
+        "📦 *Новый блок #{}*\nHash: `{}`\nВалидатор: `{}`\nТранзакций: {}",
         new_block.index, new_block.hash, new_block.validator, new_block.transactions.len()
     );
+    let _ = state.bot.send_message(state.chat_id.clone(), report).await;
 
-    // 3. Отправляем в ТГ
-    let _ = state.bot
-        .send_message(state.chat_id.clone(), report)
-        .await;
-
-    Json(format!("Блок #{} успешно добавлен в сеть", new_block.index))
+    Json(format!("Блок #{} успешно добавлен", new_block.index))
 }
 
 async fn get_blocks(State(state): State<Arc<AppState>>) -> Json<Vec<Block>> {
-    let blocks: Vec<Block> = state.db.fluent()
-        .select()
-        .from("blocks")
-        .order_by([("index", firestore::FirestoreQueryDirection::Ascending)]) // Если Asc не сработал, верни Ascending, но проверь скобки
-        .obj()
-        .query()
-        .await
-        .unwrap_or_default();
+    let rows = sqlx::query!(
+        "SELECT index, timestamp, transactions, prev_hash, hash, validator FROM blocks ORDER BY index ASC"
+    )
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let blocks = rows.into_iter().map(|r| Block {
+        index: r.index as u32,
+        timestamp: r.timestamp,
+        transactions: serde_json::from_value(r.transactions).unwrap_or_default(),
+        prev_hash: r.prev_hash,
+        hash: r.hash,
+        validator: r.validator,
+    }).collect();
 
     Json(blocks)
 }
 
 // Эндпоинт для создания кошелька
-async fn create_wallet(State(state): State<Arc<AppState>>) -> Json<MewWallet> {
-    let wallet = MewWallet::create_new();
-    
-    // Сразу создаем запись в Firestore для этого кошелька
-    let initial_stats = WalletStats {
-        address: wallet.address.clone(),
-        balance: 0.0,
-        apy_earned: 0.0,
-        tasks_completed: 0,
-        last_claim: 0,
-    };
+async fn create_wallet(State(state): State<Arc<AppState>>) -> Json<HoraiWallet> {
+    let wallet = HoraiWallet::create_new();
 
-    // Записываем в коллекцию "wallets", используя адрес как ID документа
-    let _: () = state.db.fluent()
-        .insert()
-        .into("wallets")
-        .document_id(&wallet.address)
-        .object(&initial_stats)
-        .execute::<()>()
-        .await
-        .expect("Failed to register wallet in Firestore");
+    sqlx::query!(
+        "INSERT INTO wallets (address, balance, apy_earned, tasks_completed, last_claim)
+         VALUES ($1, 0, 0, 0, 0)
+         ON CONFLICT (address) DO NOTHING",
+        wallet.address,
+    )
+    .execute(&state.db)
+    .await
+    .expect("Failed to register wallet");
 
     Json(wallet)
 }
@@ -235,43 +235,47 @@ async fn get_wallet_stats(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(address): axum::extract::Path<String>,
 ) -> Json<WalletStats> {
-    let stats_opt: Option<WalletStats> = state.db.fluent()
-        .select()
-        .by_id_in("wallets")
-        .obj()
-        .one(&address)
-        .await
-        .unwrap_or(None);
+    let row = sqlx::query!(
+        "SELECT address, balance, apy_earned, tasks_completed, last_claim FROM wallets WHERE address = $1",
+        address
+    )
+    .fetch_optional(&state.db)
+    .await
+    .unwrap_or(None);
 
-    match stats_opt {
-        Some(mut stats) => {
+    match row {
+        Some(r) => {
+            let mut stats = WalletStats {
+                address: r.address,
+                balance: r.balance,
+                apy_earned: r.apy_earned,
+                tasks_completed: r.tasks_completed as u32,
+                last_claim: r.last_claim,
+            };
+
             let now = chrono::Utc::now().timestamp();
-            
-            // Если last_claim > 0 (кошелек активен), считаем APY
             if stats.last_claim > 0 && now > stats.last_claim {
                 let seconds_passed = now - stats.last_claim;
-                
-                // 7% годовых в секунду
                 let apy_per_second = 0.07 / (365.0 * 24.0 * 3600.0);
-                let reward = stats.balance * apy_per_second * (seconds_passed as f64);
-                
-                if reward > 0.00000001 { // Не мучаем базу из-за микро-сумм
+                let reward = stats.balance * apy_per_second * seconds_passed as f64;
+
+                if reward > 0.00000001 {
                     stats.balance += reward;
                     stats.apy_earned += reward;
-                    stats.last_claim = now; // Обновляем метку времени
+                    stats.last_claim = now;
 
-                    // Сохраняем обновленный баланс в фоне
                     let db_clone = state.db.clone();
                     let stats_clone = stats.clone();
                     tokio::spawn(async move {
-                        let _ = db_clone.fluent()
-                            .update()
-                            .fields(paths!(WalletStats::{balance, apy_earned, last_claim}))
-                            .in_col("wallets")
-                            .document_id(&stats_clone.address)
-                            .object(&stats_clone)
-                            .execute::<()>()
-                            .await;
+                        let _ = sqlx::query!(
+                            "UPDATE wallets SET balance=$1, apy_earned=$2, last_claim=$3 WHERE address=$4",
+                            stats_clone.balance,
+                            stats_clone.apy_earned,
+                            stats_clone.last_claim,
+                            stats_clone.address,
+                        )
+                        .execute(&db_clone)
+                        .await;
                     });
                 }
             }
