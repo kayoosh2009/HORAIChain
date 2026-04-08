@@ -318,7 +318,7 @@ async fn import_wallet(
     };
 
     // 2. Проверяем, есть ли он в базе, если нет — создаем начальные статы
-    let _: () = state.db.fluent()
+    let _: () = state.dbsqlx::query!
         .insert()
         .into("wallets")
         .document_id(&wallet.address)
@@ -347,7 +347,7 @@ async fn send_tokens(
     let total_deduction = payload.amount + fee;
 
     // 2. Получаем данные отправителя
-    let mut sender_stats: WalletStats = state.db.fluent()
+    let mut sender_stats: WalletStats = state.dbsqlx::query!
         .select()
         .by_id_in("wallets")
         .obj()
@@ -362,7 +362,7 @@ async fn send_tokens(
     }
 
     // 4. Получаем данные получателя
-    let mut receiver_stats: WalletStats = state.db.fluent()
+    let mut receiver_stats: WalletStats = state.dbsqlx::query!
         .select()
         .by_id_in("wallets")
         .obj()
@@ -376,7 +376,7 @@ async fn send_tokens(
     receiver_stats.balance += payload.amount;
 
     // 6. Обновляем отправителя в БД
-    let _: () = state.db.fluent()
+    let _: () = state.dbsqlx::query!
         .update()
         .fields(paths!(WalletStats::balance))
         .in_col("wallets")
@@ -387,7 +387,7 @@ async fn send_tokens(
         .map_err(|_| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Failed to update sender".to_string()))?;
 
     // 7. Обновляем получателя в БД
-    let _: () = state.db.fluent()
+    let _: () = state.dbsqlx::query!
         .update()
         .fields(paths!(WalletStats::balance))
         .in_col("wallets")
@@ -398,7 +398,7 @@ async fn send_tokens(
         .map_err(|_| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Failed to update receiver".to_string()))?;
 
     // 8. Зачисляем комиссию админу (тебе)
-    let admin_opt: Option<WalletStats> = state.db.fluent()
+    let admin_opt: Option<WalletStats> = state.dbsqlx::query!
         .select()
         .by_id_in("wallets")
         .obj()
@@ -411,7 +411,7 @@ async fn send_tokens(
         let db_c = state.db.clone();
         let addr_c = admin_address.to_string();
         tokio::spawn(async move {
-            let _ = db_c.fluent()
+            let _ = db_csqlx::query!
                 .update()
                 .fields(paths!(WalletStats::balance))
                 .in_col("wallets")
@@ -439,7 +439,7 @@ async fn complete_task(
     let collection = "wallets";
 
     // 1. Пытаемся получить текущую статистику кошелька
-    let mut stats: WalletStats = state.db.fluent()
+    let mut stats: WalletStats = state.dbsqlx::query!
         .select()
         .by_id_in(collection)
         .obj()
@@ -480,7 +480,7 @@ async fn complete_task(
     stats.last_claim = now;
 
     // 5. Сохраняем в Firestore (обновляем только нужные поля для безопасности)
-    state.db.fluent()
+    state.dbsqlx::query!
         .update()
         .in_col(collection)
         .document_id(&payload.address)
@@ -516,7 +516,7 @@ async fn create_group(
         total_mined: 0.0,
     };
 
-    state.db.fluent()
+    state.dbsqlx::query!
         .insert().into("groups")
         .document_id(&new_group.id)
         .object(&new_group)
@@ -530,7 +530,7 @@ async fn node_ping(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<JoinRequest>,
 ) -> Result<Json<String>, (axum::http::StatusCode, String)> {
-    let mut group: NodeGroup = state.db.fluent()
+    let mut group: NodeGroup = state.dbsqlx::query!
         .select().by_id_in("groups").obj().one(&payload.group_id).await
         .map_err(|_| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "DB Error".to_string()))?
         .ok_or((axum::http::StatusCode::NOT_FOUND, "Group not found".to_string()))?;
@@ -554,7 +554,7 @@ async fn node_ping(
         
         // Тут нужно вызвать функцию начисления баланса пользователю...
         // И обновить группу в БД
-        state.db.fluent()
+        state.dbsqlx::query!
             .update().in_col("groups")
             .document_id(&group.id)
             .object(&group)
@@ -572,7 +572,7 @@ async fn join_group(
     Json(payload): Json<JoinRequest>,
 ) -> Result<Json<String>, (axum::http::StatusCode, String)> {
     // 1. Ищем группу в БД
-    let mut group: NodeGroup = state.db.fluent()
+    let mut group: NodeGroup = state.dbsqlx::query!
         .select()
         .by_id_in("groups")
         .obj()
@@ -597,7 +597,7 @@ async fn join_group(
     group.members.push(new_member);
 
     // 4. Сохраняем обновленный список участников в Firestore
-    state.db.fluent()
+    state.dbsqlx::query!
         .update()
         .in_col("groups")
         .document_id(&group.id)
