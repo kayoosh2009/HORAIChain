@@ -1,17 +1,15 @@
 use axum::{routing::{get, post}, Json, Router, extract::State};
 use serde::{Serialize, Deserialize};
 use std::sync::Arc;
-use firestore::*;
+use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use dotenvy::dotenv;
 use std::env;
 use teloxide::prelude::*;
 use ed25519_dalek::{SigningKey, VerifyingKey};
-use rand::rngs::OsRng;
 use tower_http::services::ServeDir;
 use bip39::{Mnemonic, Language};
-use sha2::{Sha512, Digest};
-use sqlx::PgPool;
-use sqlx::postgres::PgPoolOptions;
+use sha2::Digest;
 
 // --- МОДЕЛИ ДАННЫХ ---
 
@@ -102,7 +100,9 @@ struct JoinRequest {
 impl HoraiWallet {
     fn create_new() -> Self {
         // 1. Генерируем случайную мнемонику (12 слов = 128 бит энтропии)
-        let mnemonic = Mnemonic::generate_in(Language::English, 12)
+        let mut entropy = [0u8; 16];
+        rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut entropy);
+        let mnemonic = Mnemonic::from_entropy(&entropy)
             .expect("Failed to generate mnemonic");
 
         // 2. Из мнемоники получаем seed (стандарт BIP39, без пароля)
@@ -127,8 +127,8 @@ impl HoraiWallet {
 
     fn import_from_mnemonic(phrase: &str) -> Result<Self, String> {
         // Парсим мнемонику
-        let mnemonic = Mnemonic::parse_in(Language::English, phrase)
-            .map_err(|_| "Invalid mnemonic phrase")?;
+        let mnemonic = Mnemonic::parse(phrase)
+            .map_err(|_| "Invalid mnemonic phrase".to_string())?;
 
         // Тот же путь: мнемоника → seed → ключ → адрес
         let seed = mnemonic.to_seed("");
