@@ -314,8 +314,9 @@ async fn import_wallet(
     };
 
     // 2. Проверяем, есть ли он в базе, если нет — создаем начальные статы
-    let _: () = state.dbsqlx::query!
+    let _: () = sqlx::query!(
         sqlx::query!("INSERT INTO wallets (address, balance, apy_earned, tasks_completed, last_claim) VALUES ($1, 0, 0, 0, 0) ON CONFLICT (address) DO NOTHING", wallet.address).execute(&state.db).await.map_err(|_| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "DB Error".to_string()))?;
+    )
     Ok(Json(wallet))
 }
 
@@ -330,7 +331,7 @@ async fn send_tokens(
     let total_deduction = payload.amount + fee;
 
     // 2. Получаем данные отправителя
-    let mut sender_stats: WalletStats = state.dbsqlx::query!
+    let mut sender_stats: WalletStats = state.db
         .select()
         .by_id_in("wallets")
         .obj()
@@ -422,7 +423,7 @@ async fn complete_task(
     let collection = "wallets";
 
     // 1. Пытаемся получить текущую статистику кошелька
-    let mut stats: WalletStats = state.dbsqlx::query!
+    let mut stats: WalletStats = state.db
         .select()
         .by_id_in(collection)
         .obj()
@@ -499,7 +500,7 @@ async fn create_group(
         total_mined: 0.0,
     };
 
-    state.dbsqlx::query!
+    state.db
         .insert().into("groups")
         .document_id(&new_group.id)
         .object(&new_group)
@@ -513,7 +514,7 @@ async fn node_ping(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<JoinRequest>,
 ) -> Result<Json<String>, (axum::http::StatusCode, String)> {
-    let mut group: NodeGroup = state.dbsqlx::query!
+    let mut group: NodeGroup = state.db
         .select().by_id_in("groups").obj().one(&payload.group_id).await
         .map_err(|_| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "DB Error".to_string()))?
         .ok_or((axum::http::StatusCode::NOT_FOUND, "Group not found".to_string()))?;
@@ -555,7 +556,7 @@ async fn join_group(
     Json(payload): Json<JoinRequest>,
 ) -> Result<Json<String>, (axum::http::StatusCode, String)> {
     // 1. Ищем группу в БД
-    let mut group: NodeGroup = state.dbsqlx::query!
+    let mut group: NodeGroup = state.db
         .select()
         .by_id_in("groups")
         .obj()
