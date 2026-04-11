@@ -13,3 +13,9 @@ dotenv = "0.15"
 tower-http = { version = "0.5.1", features = ["cors"] }
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1.0"
+bip39 = "2.0.0"
+tiny-keccak = { version = "2.0", features = ["keccak"] }
+hmac = "0.12.1"
+sha2 = "0.10.8"
+hex = "0.4.3"
+getrandom = { version = "0.2", features = ["js"] }
