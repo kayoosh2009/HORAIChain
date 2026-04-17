@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Send - HoraiWallet</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --color-main: #312F2C;
+            --color-light: #FAFAFA;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, system-ui, sans-serif; }
+
+        body {
+            background-color: var(--color-main);
+            color: var(--color-light);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+        }
+
+        .header { margin-bottom: 24px; text-align: left; }
+        .title { font-size: 28px; font-weight: 800; }
+
+        .input-group { margin-bottom: 20px; }
+        .label { font-size: 11px; opacity: 0.4; margin-bottom: 8px; display: block; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 700; }
+
+        /* Поле адреса */
+        .input-box {
+            background: rgba(250, 250, 250, 0.05);
+            border: 1px solid rgba(250, 250, 250, 0.1);
+            border-radius: 20px;
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            transition: var(--transition);
+        }
+
+        .input-box:focus-within { border-color: rgba(250, 250, 250, 0.3); background: rgba(250, 250, 250, 0.08); }
+
+        input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: var(--color-light);
+            font-size: 16px;
+            outline: none;
+        }
+
+        .scan-btn {
+            width: 24px;
+            height: 24px;
+            margin-right: 12px;
+            cursor: pointer;
+            filter: invert(1); /* Если иконка черная, инвертируем в белую */
+        }
+
+        /* Кастомный выбор токена */
+        .token-selector {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(250, 250, 250, 0.05);
+            border: 1px solid rgba(250, 250, 250, 0.1);
+            border-radius: 20px;
+            padding: 12px 18px;
+            cursor: pointer;
+            margin-bottom: 12px;
+        }
+
+        .token-icon { width: 32px; height: 32px; border-radius: 8px; }
+        .token-info { flex-grow: 1; }
+        .token-name { font-size: 15px; font-weight: 700; }
+        .token-symbol { font-size: 12px; opacity: 0.5; }
+
+        .fee-panel {
+            background: rgba(250, 250, 250, 0.03);
+            border-radius: 16px;
+            padding: 16px;
+            margin-top: 10px;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .fee-label { opacity: 0.5; }
+        .fee-amount { font-weight: 700; color: #ffab2e; }
+
+        /* Кнопки */
+        .actions { margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
+
+        .btn {
+            width: 100%;
+            padding: 20px;
+            border-radius: 20px;
+            font-size: 16px;
+            font-weight: 700;
+            text-align: center;
+            cursor: pointer;
+            border: none;
+            transition: var(--transition);
+            text-transform: uppercase;
+        }
+
+        .btn-send { background: var(--color-light); color: var(--color-main); box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
+        .btn-cancel { background: transparent; color: var(--color-light); opacity: 0.5; }
+        .btn:active { transform: scale(0.97); }
+
+        /* Выпадашка выбора токена (скрытая по умолчанию) */
+        #tokenModal {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: #252321;
+            border-top: 1px solid rgba(250, 250, 250, 0.1);
+            border-radius: 30px 30px 0 0;
+            padding: 30px 24px;
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 100;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1 class="title">Send Tokens</h1>
+    </div>
+
+    <div class="input-group">
+        <span class="label">Recipient Address</span>
+        <div class="input-box">
+            <img src="../img/scan.png" class="scan-btn" onclick="triggerScan()" alt="Scan">
+            <input type="text" id="toAddress" placeholder="horai_..." spellcheck="false">
+        </div>
+    </div>
+
+    <div class="input-group">
+        <span class="label">Choose Asset</span>
+        <div class="token-selector" onclick="toggleTokenModal(true)">
+            <img src="../img/horaiToken.png" id="selectedIcon" class="token-icon">
+            <div class="token-info">
+                <p class="token-name" id="selectedName">HORAI</p>
+                <p class="token-symbol" id="selectedSymbol">Horai Main Token</p>
+            </div>
+            <span>▾</span>
+        </div>
+    </div>
+
+    <div class="input-group">
+        <span class="label">Amount</span>
+        <div class="input-box">
+            <input type="number" id="amount" placeholder="0.00" oninput="updateFee()">
+        </div>
+        <div class="fee-panel">
+            <span class="fee-label">Network Fee (3%)</span>
+            <span class="fee-amount" id="feeVal">0.00 HORAI</span>
+        </div>
+    </div>
+
+    <div class="actions">
+        <button class="btn btn-send" onclick="confirmSend()">Send Now</button>
+        <button class="btn btn-cancel" onclick="history.back()">Back</button>
+    </div>
+
+    <div id="tokenModal">
+        <h2 style="margin-bottom: 10px">Select Token</h2>
+        <div class="token-selector" onclick="selectToken('HORAI', 'Horai Main Token', '../img/horaiToken.png')">
+            <img src="../img/horaiToken.png" class="token-icon">
+            <div class="token-info"><p class="token-name">HORAI</p></div>
+        </div>
+        <div class="token-selector" onclick="selectToken('ADS', 'Advert Coin', '../img/adsToken.png')">
+            <img src="../img/adsToken.png" class="token-icon">
+            <div class="token-info"><p class="token-name">ADS</p></div>
+        </div>
+        <button class="btn btn-cancel" onclick="toggleTokenModal(false)">Close</button>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        let selectedToken = "HORAI";
+
+        function triggerScan() {
+            tg.HapticFeedback.impactOccurred('medium');
+            tg.showScanQrPopup({ text: "Scan Recipient QR" }, (text) => {
+                document.getElementById('toAddress').value = text;
+                tg.closeScanQrPopup();
+            });
+        }
+
+        function toggleTokenModal(show) {
+            document.getElementById('tokenModal').style.display = show ? 'flex' : 'none';
+        }
+
+        function selectToken(name, symbol, img) {
+            selectedToken = name;
+            document.getElementById('selectedName').innerText = name;
+            document.getElementById('selectedSymbol').innerText = symbol;
+            document.getElementById('selectedIcon').src = img;
+            toggleTokenModal(false);
+            updateFee();
+        }
+
+        function updateFee() {
+            const amt = document.getElementById('amount').value;
+            const fee = (amt * 0.03).toFixed(4);
+            document.getElementById('feeVal').innerText = `${fee} ${selectedToken}`;
+        }
+
+        function confirmSend() {
+            const addr = document.getElementById('toAddress').value;
+            const amt = document.getElementById('amount').value;
+
+            if(!addr || amt <= 0) {
+                tg.showAlert("Please enter valid address and amount");
+                return;
+            }
+
+            tg.showConfirm(`Confirm sending ${amt} ${selectedToken}?`, (ok) => {
+                if(ok) {
+                    tg.HapticFeedback.notificationOccurred('success');
+                    // Сохраняем детали транзакции в сессию, чтобы wait.html знал, что показывать
+                    sessionStorage.setItem('last_tx', JSON.stringify({
+                        to: addr,
+                        amount: amt,
+                        token: selectedToken
+                    }));
+                    window.location.href = "wait.html";
+                }
+            });
+        }
+    </script>
+</body>
+</html>

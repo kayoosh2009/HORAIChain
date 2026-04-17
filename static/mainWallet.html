@@ -41,18 +41,10 @@
             border: 1px solid rgba(250, 250, 250, 0.1);
         }
 
-        .settings-btn img {
-            width: 28px;
-            height: 28px;
-            cursor: pointer;
-        }
+        .settings-btn img { width: 28px; height: 28px; cursor: pointer; }
 
         /* Balance Section */
-        .balance-section {
-            text-align: center;
-            margin: 40px 0;
-        }
-
+        .balance-section { text-align: center; margin: 40px 0; }
         .balance-label { font-size: 14px; opacity: 0.5; margin-bottom: 8px; }
         .total-amount { font-size: 48px; font-weight: 800; }
 
@@ -86,7 +78,6 @@
         }
 
         .action-icon img { width: 24px; height: 24px; }
-        .action-item:active .action-icon { transform: scale(0.9); background: rgba(250, 250, 250, 0.15); }
         .action-text { font-size: 12px; font-weight: 500; opacity: 0.8; }
 
         .divider {
@@ -97,17 +88,19 @@
         }
 
         /* Token List */
-        .token-list {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
+        .token-list { display: flex; flex-direction: column; gap: 10px; }
 
         .token-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding: 12px;
+            border-radius: 18px;
+            transition: var(--transition);
+            cursor: pointer;
         }
+
+        .token-item:active { background: rgba(250, 250, 250, 0.05); transform: scale(0.98); }
 
         .token-info { display: flex; align-items: center; gap: 15px; }
         .token-icon { width: 45px; height: 45px; border-radius: 12px; }
@@ -135,19 +128,19 @@
 
     <div class="actions-grid">
         <a href="mini/sent.html" class="action-item">
-            <div class="action-icon"><img src="img/sent.png"></div>
+            <div class="action-icon"><img src="../img/sent.png"></div>
             <span class="action-text">Send</span>
         </a>
         <a href="mini/get.html" class="action-item">
-            <div class="action-icon"><img src="img/get.png"></div>
+            <div class="action-icon"><img src="../img/get.png"></div>
             <span class="action-text">Receive</span>
         </a>
         <a href="mini/swarp.html" class="action-item">
-            <div class="action-icon"><img src="img/swarp.png"></div>
+            <div class="action-icon"><img src="../img/swarp.png"></div>
             <span class="action-text">Swap</span>
         </a>
         <a href="mini/menu.html" class="action-item">
-            <div class="action-icon"><img src="img/menu.png"></div>
+            <div class="action-icon"><img src="../img/menu.png"></div>
             <span class="action-text">Menu</span>
         </a>
     </div>
@@ -155,7 +148,7 @@
     <div class="divider"></div>
 
     <div class="token-list">
-        <div class="token-item">
+        <div class="token-item" onclick="openTokenInfo('HORAI')">
             <div class="token-info">
                 <img src="img/horaiToken.png" class="token-icon">
                 <div>
@@ -169,7 +162,7 @@
             </div>
         </div>
 
-        <div class="token-item">
+        <div class="token-item" onclick="openTokenInfo('ADS')">
             <div class="token-info">
                 <img src="img/adsToken.png" class="token-icon">
                 <div>
@@ -193,11 +186,8 @@
                 window.location.href = "index.html";
                 return;
             }
-            
-            // Отображаем сокращенный адрес
             const shortAddr = address.substring(0, 9) + "..." + address.substring(address.length - 4);
             document.getElementById('walletAddr').innerText = shortAddr;
-            
             loadBalances();
         }
 
@@ -207,18 +197,14 @@
             tg.showAlert("Address copied!");
         }
 
+        // Функция открытия инфо о токене
+        function openTokenInfo(symbol) {
+            tg.HapticFeedback.impactOccurred('light');
+            window.location.href = `mini/tokeninfo.html?token=${symbol}`;
+        }
+
         async function loadBalances() {
-            try {
-                // Запрос к твоему бэкенду на Rust для получения баланса
-                const response = await fetch(`/api/wallet/balance?address=${address}`);
-                const data = await response.json();
-                
-                // Здесь будет логика обновления цифр из ответа Rust/Supabase
-                // Пока ставим заглушку, которую ты свяжешь с данными
-                console.log("Balances loaded:", data);
-            } catch (e) {
-                console.error("Balance fetch failed");
-            }
+            // Тут твой fetch к Rust API для получения балансов из Supabase
         }
 
         window.onload = init;

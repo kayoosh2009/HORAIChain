@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Processing - HoraiWallet</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --color-main: #312F2C;
+            --color-light: #FAFAFA;
+            --color-accent: #ffab2e;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, system-ui, sans-serif; }
+
+        body {
+            background-color: var(--color-main);
+            color: var(--color-light);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            padding: 24px;
+        }
+
+        /* Анимация прыгающего шарика */
+        .loader-container {
+            position: relative;
+            height: 100px;
+            width: 100px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            margin-bottom: 40px;
+        }
+
+        .ball {
+            width: 30px;
+            height: 30px;
+            background: var(--color-light);
+            border-radius: 50%;
+            position: relative;
+            animation: bounce 0.6s infinite alternate cubic-bezier(0.5, 0.05, 1, 0.5);
+            box-shadow: 0 0 20px rgba(250, 250, 250, 0.2);
+        }
+
+        .shadow {
+            width: 30px;
+            height: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 50%;
+            position: absolute;
+            bottom: -15px;
+            transform: scaleX(1);
+            animation: shadowSize 0.6s infinite alternate cubic-bezier(0.5, 0.05, 1, 0.5);
+            filter: blur(2px);
+        }
+
+        @keyframes bounce {
+            from { transform: translateY(0) scaleX(1.1); }
+            to { transform: translateY(-80px) scaleX(1); }
+        }
+
+        @keyframes shadowSize {
+            from { transform: scaleX(1.2); opacity: 0.6; }
+            to { transform: scaleX(0.4); opacity: 0.2; }
+        }
+
+        /* Текстовые статусы */
+        .status-box {
+            text-align: center;
+            height: 50px; /* Фиксированная высота, чтобы текст не прыгал */
+        }
+
+        .status-text {
+            font-size: 16px;
+            font-weight: 500;
+            opacity: 0.8;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+        }
+
+        .dots {
+            display: inline-block;
+            width: 20px;
+            text-align: left;
+        }
+
+        .progress-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            height: 4px;
+            background: var(--color-accent);
+            width: 0%;
+            transition: width 5s linear;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="loader-container">
+        <div class="ball"></div>
+        <div class="shadow"></div>
+    </div>
+
+    <div class="status-box">
+        <p class="status-text" id="status">Initiating transaction<span class="dots">...</span></p>
+    </div>
+
+    <div class="progress-bar" id="progress"></div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        const statuses = [
+            "Connecting to HoraiChain...",
+            "Validating transaction hashes...",
+            "Encrypting payload...",
+            "Broadcasting to nodes...",
+            "Waiting for confirmation...",
+            "Success! Finalizing..."
+        ];
+
+        let currentIdx = 0;
+        const statusEl = document.getElementById('status');
+        const progressEl = document.getElementById('progress');
+
+        // Смена текста
+        const statusInterval = setInterval(() => {
+            if (currentIdx < statuses.length - 1) {
+                currentIdx++;
+                statusEl.style.opacity = 0;
+                setTimeout(() => {
+                    statusEl.innerHTML = statuses[currentIdx] + '<span class="dots">...</span>';
+                    statusEl.style.opacity = 1;
+                }, 300);
+            }
+        }, 800);
+
+        // Полоска прогресса и редирект
+        window.onload = () => {
+            // Запускаем полоску
+            setTimeout(() => {
+                progressEl.style.width = '100%';
+            }, 100);
+
+            // Через 5 секунд уходим на главную
+            setTimeout(() => {
+                clearInterval(statusInterval);
+                tg.HapticFeedback.notificationOccurred('success');
+                window.location.href = "../mainWallet.html";
+            }, 5500);
+        };
+    </script>
+</body>
+</html>
