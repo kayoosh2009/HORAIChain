@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>HoraiWallet</title>
+    <style>
+        :root {
+            --color-main: #312F2C;
+            --color-light: #FAFAFA;
+            --shadow: 0 10px 30px rgba(49, 47, 44, 0.2);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--color-main);
+            background-image: url('img/background.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            color: var(--color-light);
+            height: 100vh;
+            height: 100dvh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 40px 24px;
+            overflow: hidden;
+        }
+
+        /* Overlay for contrast and color depth */
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(180deg, rgba(49, 47, 44, 0.1) 0%, var(--color-main) 90%);
+            z-index: -1;
+        }
+
+        .welcome-section {
+            text-align: left;
+            margin-bottom: auto;
+            animation: slideInLeft 0.7s ease-out;
+        }
+
+        .welcome-title {
+            font-size: 36px;
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -1px;
+            color: var(--color-light);
+        }
+
+        .welcome-subtitle {
+            font-size: 16px;
+            color: var(--color-light);
+            margin-top: 12px;
+            opacity: 0.7;
+            font-weight: 400;
+        }
+
+        .button-container {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            width: 100%;
+            animation: fadeInUp 0.8s ease-out;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 20px;
+            border-radius: 18px;
+            font-size: 16px;
+            font-weight: 700;
+            text-align: center;
+            cursor: pointer;
+            border: none;
+            transition: var(--transition);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Primary button: Light background, dark text */
+        .btn-primary {
+            background-color: var(--color-light);
+            color: var(--color-main);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-primary:active {
+            transform: scale(0.97);
+            filter: brightness(0.9);
+        }
+
+        /* Secondary button: Transparent with light border */
+        .btn-secondary {
+            background-color: rgba(250, 250, 250, 0.05);
+            color: var(--color-light);
+            border: 1.5px solid rgba(250, 250, 250, 0.3);
+            backdrop-filter: blur(15px);
+        }
+
+        .btn-secondary:active {
+            transform: scale(0.97);
+            background-color: rgba(250, 250, 250, 0.1);
+        }
+
+        @keyframes slideInLeft {
+            from { opacity: 0; transform: translateX(-30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Mobile safe area support */
+        @media (max-width: 480px) {
+            body {
+                padding-bottom: calc(40px + env(safe-area-inset-bottom));
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="welcome-section">
+        <h1 class="welcome-title">Welcome to<br>HoraiWallet</h1>
+        <p class="welcome-subtitle">The next generation of crypto security</p>
+    </div>
+
+    <div class="button-container">
+        <a href="createWallet.html" class="btn btn-primary">Create Wallet</a>
+        <a href="importWallet.html" class="btn btn-secondary">Import Wallet</a>
+    </div>
+
+    <script>
+        const savedAddress = localStorage.getItem('horai_address');
+        if (savedAddress) {
+            window.location.href = "mainWallet.html";
+        }
+    </script>
+</body>
+</html>

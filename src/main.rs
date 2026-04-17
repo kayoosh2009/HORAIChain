@@ -1,6 +1,7 @@
 use axum::{
     routing::get,
     Router,
+    Json,
 };
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
@@ -8,6 +9,9 @@ use dotenv::dotenv;
 use std::env;
 use bip39::{Mnemonic, Language};
 use tiny_keccak::{Hasher, Keccak};
+use tower_http::services::ServeDir;
+use serde_json::{json, Value};
+use axum::routing::post;
 
 // --- Data Setup ---
 #[derive(Debug)]
@@ -271,8 +275,14 @@ async fn main() {
     
     println!("Configuration loaded successfully.");
 
+    let static_files_service = ServeDir::new("static")
+    .fallback(ServeDir::new("static").append_index_html_on_directories(true));
+
     let app = Router::new()
-        .route("/", get(health_check))
+        .route("/api/health", get(health_check))
+        .route("/api/wallet/generate", get(generate_wallet_handler)) // ТВОЙ НОВЫЙ ОРИЕНТИР
+        .route("/api/wallet/import", post(import_wallet_handler))
+        .fallback_service(static_files_service)
         .layer(CorsLayer::permissive());
 
     let port = env::var("PORT")
@@ -286,6 +296,25 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+async fn generate_wallet_handler() -> Json<Value> {
+    let wallet = create_wallet().await; // Вызываем твою функцию создания
+    
+    // Возвращаем JSON, который поймет JS во фронтенде
+    Json(json!({
+        "mnemonic": wallet.mnemonic,
+        "address": wallet.address
+    }))
+}
+
+async fn import_wallet_handler(Json(payload): Json<serde_json::Value>) -> Json<serde_json::Value> {
+    let phrase = payload["phrase"].as_str().unwrap_or("");
+    
+    match import_wallet(phrase) {
+        Ok(info) => Json(json!({ "status": "success", "address": info.address })),
+        Err(e) => Json(json!({ "status": "error", "message": e })),
+    }
 }
 
 async fn health_check() -> &'static str {

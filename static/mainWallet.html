@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>HoraiWallet - Dashboard</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --color-main: #312F2C;
+            --color-light: #FAFAFA;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, system-ui, sans-serif; }
+
+        body {
+            background-color: var(--color-main);
+            color: var(--color-light);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 20px 20px;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: calc(10px + env(safe-area-inset-top));
+        }
+
+        .address-pill {
+            background: rgba(250, 250, 250, 0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid rgba(250, 250, 250, 0.1);
+        }
+
+        .settings-btn img {
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+        }
+
+        /* Balance Section */
+        .balance-section {
+            text-align: center;
+            margin: 40px 0;
+        }
+
+        .balance-label { font-size: 14px; opacity: 0.5; margin-bottom: 8px; }
+        .total-amount { font-size: 48px; font-weight: 800; }
+
+        /* Actions Grid */
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 40px;
+        }
+
+        .action-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            color: var(--color-light);
+        }
+
+        .action-icon {
+            width: 60px;
+            height: 60px;
+            background: rgba(250, 250, 250, 0.05);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: var(--transition);
+            border: 1px solid rgba(250, 250, 250, 0.1);
+        }
+
+        .action-icon img { width: 24px; height: 24px; }
+        .action-item:active .action-icon { transform: scale(0.9); background: rgba(250, 250, 250, 0.15); }
+        .action-text { font-size: 12px; font-weight: 500; opacity: 0.8; }
+
+        .divider {
+            height: 1px;
+            background: rgba(250, 250, 250, 0.1);
+            width: 100%;
+            margin-bottom: 30px;
+        }
+
+        /* Token List */
+        .token-list {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .token-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .token-info { display: flex; align-items: center; gap: 15px; }
+        .token-icon { width: 45px; height: 45px; border-radius: 12px; }
+        .token-name { font-size: 16px; font-weight: 700; }
+        .token-symbol { font-size: 12px; opacity: 0.5; }
+
+        .token-balance { text-align: right; }
+        .balance-val { font-size: 16px; font-weight: 700; }
+        .balance-usd { font-size: 12px; opacity: 0.5; }
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <div class="address-pill" id="walletAddr" onclick="copyAddress()">horai_...</div>
+        <a href="settings.html" class="settings-btn">
+            <img src="img/settings.png" alt="Settings">
+        </a>
+    </div>
+
+    <div class="balance-section">
+        <p class="balance-label">Total Balance</p>
+        <h1 class="total-amount" id="totalBalance">$0.00</h1>
+    </div>
+
+    <div class="actions-grid">
+        <a href="mini/sent.html" class="action-item">
+            <div class="action-icon"><img src="img/sent.png"></div>
+            <span class="action-text">Send</span>
+        </a>
+        <a href="mini/get.html" class="action-item">
+            <div class="action-icon"><img src="img/get.png"></div>
+            <span class="action-text">Receive</span>
+        </a>
+        <a href="mini/swarp.html" class="action-item">
+            <div class="action-icon"><img src="img/swarp.png"></div>
+            <span class="action-text">Swap</span>
+        </a>
+        <a href="mini/menu.html" class="action-item">
+            <div class="action-icon"><img src="img/menu.png"></div>
+            <span class="action-text">Menu</span>
+        </a>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="token-list">
+        <div class="token-item">
+            <div class="token-info">
+                <img src="img/horaiToken.png" class="token-icon">
+                <div>
+                    <p class="token-name">HORAI</p>
+                    <p class="token-symbol">Horai Token</p>
+                </div>
+            </div>
+            <div class="token-balance">
+                <p class="balance-val" id="horaiAmount">0.00</p>
+                <p class="balance-usd" id="horaiUsd">$0.00</p>
+            </div>
+        </div>
+
+        <div class="token-item">
+            <div class="token-info">
+                <img src="img/adsToken.png" class="token-icon">
+                <div>
+                    <p class="token-name">ADS</p>
+                    <p class="token-symbol">Advert Coin</p>
+                </div>
+            </div>
+            <div class="token-balance">
+                <p class="balance-val" id="adsAmount">0.00</p>
+                <p class="balance-usd" id="adsUsd">$0.00</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        const address = localStorage.getItem('horai_address');
+
+        function init() {
+            if (!address) {
+                window.location.href = "index.html";
+                return;
+            }
+            
+            // Отображаем сокращенный адрес
+            const shortAddr = address.substring(0, 9) + "..." + address.substring(address.length - 4);
+            document.getElementById('walletAddr').innerText = shortAddr;
+            
+            loadBalances();
+        }
+
+        function copyAddress() {
+            navigator.clipboard.writeText(address);
+            tg.HapticFeedback.notificationOccurred('success');
+            tg.showAlert("Address copied!");
+        }
+
+        async function loadBalances() {
+            try {
+                // Запрос к твоему бэкенду на Rust для получения баланса
+                const response = await fetch(`/api/wallet/balance?address=${address}`);
+                const data = await response.json();
+                
+                // Здесь будет логика обновления цифр из ответа Rust/Supabase
+                // Пока ставим заглушку, которую ты свяжешь с данными
+                console.log("Balances loaded:", data);
+            } catch (e) {
+                console.error("Balance fetch failed");
+            }
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>

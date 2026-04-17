@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Create Wallet</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --color-main: #312F2C;
+            --color-light: #FAFAFA;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, system-ui, sans-serif; }
+
+        body {
+            background-color: var(--color-main);
+            color: var(--color-light);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 40px 24px;
+            overflow: hidden;
+        }
+
+        .header { margin-bottom: 30px; text-align: left; }
+        .title { font-size: 32px; font-weight: 800; }
+        .subtitle { font-size: 14px; opacity: 0.6; margin-top: 8px; line-height: 1.4; }
+
+        /* Seed phrase grid */
+        .seed-box {
+            background: rgba(250, 250, 250, 0.05);
+            border: 1px solid rgba(250, 250, 250, 0.1);
+            border-radius: 24px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+            backdrop-filter: blur(10px);
+        }
+
+        .word {
+            background: rgba(250, 250, 250, 0.08);
+            padding: 12px 6px;
+            border-radius: 12px;
+            font-size: 13px;
+            text-align: center;
+            font-weight: 600;
+            border: 1px solid rgba(250, 250, 250, 0.05);
+        }
+
+        .actions { margin-top: auto; display: flex; flex-direction: column; gap: 14px; }
+
+        .btn {
+            width: 100%;
+            padding: 20px;
+            border-radius: 18px;
+            font-size: 16px;
+            font-weight: 700;
+            text-align: center;
+            cursor: pointer;
+            border: none;
+            transition: var(--transition);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-copy { background: transparent; color: var(--color-light); border: 1.5px solid rgba(250, 250, 250, 0.2); }
+        .btn-done { background: var(--color-light); color: var(--color-main); }
+        .btn:active { transform: scale(0.97); opacity: 0.8; }
+
+        /* Confirmation Box */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 24px;
+            backdrop-filter: blur(8px);
+        }
+
+        .modal {
+            background: var(--color-main);
+            border: 1.5px solid var(--color-light);
+            padding: 32px 24px;
+            border-radius: 28px;
+            text-align: center;
+            width: 100%;
+            max-width: 340px;
+        }
+
+        .modal-text { font-size: 18px; font-weight: 700; margin-bottom: 24px; line-height: 1.4; }
+
+        /* Loader */
+        #loader { font-size: 14px; opacity: 0.5; text-align: center; width: 100%; grid-column: span 3; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1 class="title">Seed Phrase</h1>
+        <p class="subtitle">Your recovery phrase is the only way to restore your wallet. Copy it and keep it safe.</p>
+    </div>
+
+    <div class="seed-box" id="seed-container">
+        <div id="loader">Generating secure keys...</div>
+    </div>
+
+    <div class="actions">
+        <button class="btn btn-copy" onclick="copyPhrase()">Copy to clipboard</button>
+        <button class="btn btn-done" onclick="toggleModal(true)">I've saved it</button>
+    </div>
+
+    <div class="modal-overlay" id="confirm-modal">
+        <div class="modal">
+            <p class="modal-text">Are you sure you have saved your seed phrase?</p>
+            <button class="btn btn-done" onclick="finish()">YES, I'M SURE</button>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        // Переменные для хранения данных сессии
+        let fullMnemonic = "";
+        let currentAddress = "";
+
+        /**
+         * Секретная функция сохранения входа
+         * Записывает адрес в локальное хранилище браузера
+         */
+        function saveSession(address) {
+            if (address) {
+                localStorage.setItem('horai_address', address);
+                console.log("Session saved for address:", address);
+            }
+        }
+
+        /**
+         * Получаем данные от Rust бэкенда
+         */
+        async function getSeed() {
+            try {
+                const response = await fetch('/api/wallet/generate');
+                if (!response.ok) throw new Error('Backend error');
+                
+                const data = await response.json();
+                
+                fullMnemonic = data.mnemonic;
+                currentAddress = data.address; // Сохраняем адрес, полученный от Rust
+
+                const words = fullMnemonic.split(' ');
+                const container = document.getElementById('seed-container');
+                
+                container.innerHTML = ''; // Убираем лоадер
+                words.forEach((word, i) => {
+                    const div = document.createElement('div');
+                    div.className = 'word';
+                    div.innerHTML = `<span style="opacity:0.3;margin-right:4px">${i+1}</span>${word}`;
+                    container.appendChild(div);
+                });
+            } catch (err) {
+                console.error(err);
+                document.getElementById('loader').innerText = "Error connecting to backend";
+            }
+        }
+
+        /**
+         * Копирование фразы
+         */
+        function copyPhrase() {
+            if(!fullMnemonic) return;
+            
+            // Современный способ копирования
+            navigator.clipboard.writeText(fullMnemonic).then(() => {
+                tg.HapticFeedback.notificationOccurred('success');
+                tg.showConfirm ? tg.showAlert("Seed phrase copied!") : alert("Seed phrase copied!");
+            }).catch(err => {
+                // Фолбэк если clipboard API заблокирован
+                const el = document.createElement('textarea');
+                el.value = fullMnemonic;
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+                tg.showAlert("Seed phrase copied!");
+            });
+        }
+
+        /**
+         * Управление модальным окном
+         */
+        function toggleModal(show) {
+            document.getElementById('confirm-modal').style.display = show ? 'flex' : 'none';
+        }
+
+        /**
+         * Финальное действие: сохранение и переход
+         */
+        function finish() {
+            // Вызываем секретную функцию перед уходом со страницы
+            saveSession(currentAddress);
+            
+            // Переходим в основной интерфейс кошелька
+            window.location.href = "mainWallet.html";
+        }
+
+        // Инициализация при загрузке страницы
+        window.onload = getSeed;
+    </script>
+
+</body>
+</html>
