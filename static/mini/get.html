@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Receive - HoraiWallet</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        :root {
+            --color-main: #312F2C;
+            --color-light: #FAFAFA;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, system-ui, sans-serif; }
+
+        body {
+            background-color: var(--color-main);
+            color: var(--color-light);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .header { margin-bottom: 30px; }
+        .title { font-size: 28px; font-weight: 800; }
+
+        /* Контейнер для QR */
+        .qr-wrapper {
+            background: #FFFFFF; /* Белый фон для лучшего сканирования */
+            padding: 20px;
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+        }
+
+        #qrcode img {
+            width: 200px;
+            height: 200px;
+        }
+
+        /* Кнопка адреса */
+        .address-display {
+            background: rgba(250, 250, 250, 0.05);
+            border: 1px solid rgba(250, 250, 250, 0.1);
+            padding: 16px 20px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: var(--transition);
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .address-display:active {
+            transform: scale(0.98);
+            background: rgba(250, 250, 250, 0.1);
+        }
+
+        .address-text {
+            font-size: 14px;
+            font-family: 'Courier New', monospace; /* Моноширинный шрифт для адреса */
+            word-break: break-all;
+            opacity: 0.8;
+        }
+
+        .copy-hint {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 8px;
+            color: #ffab2e;
+            font-weight: 700;
+        }
+
+        .spacer { flex-grow: 1; }
+
+        /* Кнопка Хорошо */
+        .btn-ok {
+            width: 100%;
+            padding: 20px;
+            border-radius: 20px;
+            background: var(--color-light);
+            color: var(--color-main);
+            font-size: 16px;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            transition: var(--transition);
+            text-transform: uppercase;
+            margin-bottom: env(safe-area-inset-bottom);
+        }
+
+        .btn-ok:active { transform: scale(0.97); opacity: 0.9; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1 class="title">Receive</h1>
+        <p style="opacity: 0.5; font-size: 14px; margin-top: 8px;">Show this QR code to the sender</p>
+    </div>
+
+    <div class="qr-wrapper">
+        <div id="qrcode"></div>
+    </div>
+
+    <div class="address-display" onclick="copyToClipboard()">
+        <p class="address-text" id="walletAddr">horai_...</p>
+        <p class="copy-hint">Tap to copy address</p>
+    </div>
+
+    <div class="spacer"></div>
+
+    <button class="btn-ok" onclick="goBack()">Хорошо</button>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        const address = localStorage.getItem('horai_address') || "no_address_found";
+
+        function init() {
+            // Устанавливаем текст адреса
+            document.getElementById('walletAddr').innerText = address;
+
+            // Генерируем QR код
+            new QRCode(document.getElementById("qrcode"), {
+                text: address,
+                width: 200,
+                height: 200,
+                colorDark : "#000000",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
+            });
+        }
+
+        function copyToClipboard() {
+            navigator.clipboard.writeText(address).then(() => {
+                tg.HapticFeedback.notificationOccurred('success');
+                tg.showAlert("Address copied to clipboard!");
+            });
+        }
+
+        function goBack() {
+            window.location.href = "../mainWallet.html";
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
